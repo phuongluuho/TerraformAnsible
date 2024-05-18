@@ -1,0 +1,353 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Deploying to AWS with Terraform Lab",
+    "Resources": {
+        "IGW":{
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags":[
+                    {"Key": "Name", "Value": "Terraform-Lab-IGW"}
+                ]
+            }
+        },
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
+                "CidrBlock": "10.0.0.0/16",
+                "Tags": [
+                    {
+                        "Key": "Name", "Value": {"Ref": "AWS::StackName" }
+                    },
+                    {
+                        "Key": "Purpose","Value": "Terraform-Lab-VPC"
+                    }
+                ]
+            }
+        },
+        "IGWAttach": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {"Ref":"VPC"},
+                "InternetGatewayId": {"Ref":"IGW"}
+            }
+        },
+        "RouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {"Ref":"VPC"}
+            }
+        },
+        "InternetRoute":{
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {"Ref":"IGW"},
+                "RouteTableId": {"Ref":"RouteTable"}
+            }
+        },
+        "SubnetRouteAssociationA":{
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {"Ref":"RouteTable"},
+                "SubnetId": {"Ref":"SubnetA"}
+            }
+        },
+        "SubnetRouteAssociationB": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {"Ref":"RouteTable"},
+                "SubnetId": {"Ref":"SubnetB"}
+            }
+        },
+        "SGLB": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "SG for ALB",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SG_LB"
+                    }
+                ],
+                "SecurityGroupIngress": [
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "IpProtocol": "tcp"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "IpProtocol": "tcp"
+                    }
+                ],
+                "VpcId": {"Ref":"VPC"}
+            }
+        },
+        "SG": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "SG for Terraform Lab",
+                "VpcId": {"Ref" : "VPC"},
+                "Tags":[
+                    {
+                        "Key": "Name", "Value": "Terrafor-Lab-SG"
+                    }
+                ]
+            }
+
+        },
+        "SubnetA":{
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {"Ref":"VPC"},
+                "AvailabilityZone": {"Fn::Select": ["0", { "Fn::GetAZs" : {"Ref" : "AWS::Region"}} ]},
+                "CidrBlock": "10.0.1.0/24",
+                "Tags":[
+                    {
+                        "Key": "Name","Value":"SubnetA"
+                    }
+                ],
+                "MapPublicIpOnLaunch": true
+            }
+        },
+        "SubnetB":{
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {"Ref":"VPC"},
+                "AvailabilityZone": {"Fn::Select": ["1", { "Fn::GetAZs" : {"Ref" : "AWS::Region"}} ]},
+                "CidrBlock": "10.0.2.0/24",
+                "Tags":[
+                    {
+                        "Key": "Name","Value":"SubnetB"
+                    }
+                ],
+                "MapPublicIpOnLaunch": true
+            }
+        },
+        "EC2SecurityIngress": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "FromPort": 22,
+                "GroupId": {"Fn::GetAtt": ["SG", "GroupId"]},
+                "ToPort": 22,
+                "CidrIp": "0.0.0.0/0",
+                "IpProtocol": "tcp"
+            }
+        },
+        "EC2SecuritySGLB": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "FromPort": 80,
+                "ToPort": 80,
+                "SourceSecurityGroupId": {"Ref":"SGLB"},
+                "IpProtocol": "tcp",
+                "GroupId": {"Fn::GetAtt": ["SG", "GroupId"]}
+            }
+        },
+        "TerraformRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "Path": "/",
+                "RoleName": "TerraformRole",
+                "AssumeRolePolicyDocument":{
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": "sts:AssumeRole",
+                            "Principal": {
+                                "Service": ["ec2.amazonaws.com"]
+                            }
+                        }
+                    ]
+                },
+                "Policies":[
+                    {
+                        "PolicyName": "CustomPolicyLab",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                              {
+                                "Sid": "Stmt1591121535953",
+                                "Action": [
+                                  "ec2:Describe*",
+                                  "ec2:Get*",
+                                  "elasticloadbalancing:*",
+                                  "route53:ChangeResourceRecordSets",
+                                  "route53:GetHostedZone",
+                                  "route53:List*",
+                                  "route53:GetChange"
+
+                                ],
+                                "Effect": "Allow",
+                                "Resource": "*"
+                        },
+                        {
+                            "Sid": "Stmt1591289775258",
+                            "Action": [
+                              "acm:AddTagsToCertificate",
+                              "acm:DeleteCertificate",
+                              "acm:DescribeCertificate",
+                              "acm:GetCertificate",
+                              "acm:ListTagsForCertificate",
+                              "acm:RemoveTagsFromCertificate",
+                              "acm:RequestCertificate"
+                            ],
+                            "Effect": "Allow",
+                            "Resource": "*"
+                          }
+                    ]
+                }
+            }
+        ]
+    }
+},
+"EC2InstanceProfile":{
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Path": "/",
+                "Roles": [
+                    {"Ref":"TerraformRole"}
+                ]
+            }
+        },
+        "TerraformController":{
+            "Type": "AWS::EC2::Instance",
+            "CreationPolicy": {
+                "ResourceSignal": {
+                    "Count": "1",
+                    "Timeout": "PT8M"
+                }
+            },
+            "Properties": {
+                "ImageId": "ami-07caf09b362be10b8",
+                "InstanceType": "t3.micro",
+                "Tags":[
+                    {
+                        "Key": "Name", "Value": "TerraformController"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {"Ref": "SG" }
+                ],
+                "IamInstanceProfile":{ "Ref": "EC2InstanceProfile" },
+                "SubnetId": {"Ref":"SubnetA"},
+                "KeyName": "Name-YourKeyPair",
+                "UserData": {"Fn::Base64":{ 
+                    "Fn::Join": [
+                    "",
+                    [
+                        "#!/bin/bash\n",
+                        "yum -y install git wget jq unzip\n",
+                        "sudo service sshd restart\n",
+                        "sudo -iu ec2-user aws configure set default.region ",
+                        {"Ref": "AWS::Region"},
+                        "\n",
+                        "wget -P /tmp -c https://releases.hashicorp.com/terraform/1.8.3/terraform_1.8.3_linux_amd64.zip\n",
+                        "unzip /tmp/terraform_0.12.29_linux_amd64.zip -d /bin/\n",
+                        "echo 'vpc_master: '",
+                        {"Ref":"VPC"},
+                        ">> /home/ec2-user/resource_ids.txt\n",
+                        "echo 'security_group_lb: '",
+                        {"Ref":"SGLB"},
+                        ">> /home/ec2-user/resource_ids.txt\n",
+                        "echo 'subnet_1: '",
+                        {"Ref": "SubnetA"},
+                        ">> /home/ec2-user/resource_ids.txt\n",
+                        "echo 'subnet_2: '",
+                        {"Ref":"SubnetB"},
+                        ">> /home/ec2-user/resource_ids.txt\n",
+                        "echo 'apache1: '",
+                        {"Ref":"ApacheWebServer1"},
+                        ">> /home/ec2-user/resource_ids.txt\n",
+                        "echo 'apache2: '",
+                        {"Ref":"ApacheWebServer2"},
+                        ">> /home/ec2-user/resource_ids.txt\n",
+                        "/opt/aws/bin/cfn-signal --exit-code 0 --resource TerraformController --region ",
+                        {
+                        "Ref": "AWS::Region"
+                        },
+                        " ",
+                        "--stack ",
+                        {
+                        "Ref": "AWS::StackName"
+                        }
+                    ]
+                ]
+                }
+            }
+            }
+        },
+        "ApacheWebServer1":{
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": "ami-07caf09b362be10b8",
+                "InstanceType": "t3.micro",
+                "Tags":[
+                    {
+                        "Key": "Name", "Value": "ApacheWebServer1"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {"Ref": "SG" }
+                ],
+                "SubnetId": {"Ref":"SubnetA"},
+                "KeyName": "Name-YourKeyPair",
+                "UserData": {"Fn::Base64":{ 
+                    "Fn::Join": [
+                    "",
+                    [
+                        "#!/bin/bash\n",
+                        "yum -y install httpd\n",
+                        "sudo service sshd restart\n",
+                        "sudo service httpd restart\n",
+                        "sudo echo '<h1>Web Server 1</h1>' > /var/www/html/index.html\n"
+                    ]
+                ]
+                }
+            }
+            }
+        },
+        "ApacheWebServer2":{
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": "ami-07caf09b362be10b8",
+                "InstanceType": "t3.micro",
+                "Tags":[
+                    {
+                        "Key": "Name", "Value": "ApacheWebServer2"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {"Ref": "SG" }
+                ],
+                "SubnetId": {"Ref":"SubnetB"},
+                "KeyName": "Name-YourKeyPair",
+                "UserData": {"Fn::Base64":{ 
+                    "Fn::Join": [
+                    "",
+                    [
+                        "#!/bin/bash\n",
+                        "yum -y install httpd\n",
+                        "sudo service sshd restart\n",
+                        "sudo service httpd restart\n",
+                        "sudo echo '<h1>Web Server 2</h1>' > /var/www/html/index.html\n"
+                    ]
+                ]
+                }
+            }
+            }
+        }
+    },
+    "Outputs": {
+        "pubIpAddress1":{
+            "Description": "Terraform-Controller",
+            "Value": {"Fn::GetAtt": ["TerraformController", "PublicIp"]}
+        }
+    }
+}
