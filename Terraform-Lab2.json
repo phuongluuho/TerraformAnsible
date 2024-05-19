@@ -249,7 +249,7 @@
                         {"Ref": "AWS::Region"},
                         "\n",
                         "wget -P /tmp -c https://releases.hashicorp.com/terraform/1.8.3/terraform_1.8.3_linux_amd64.zip\n",
-                        "unzip /tmp/terraform_0.12.29_linux_amd64.zip -d /bin/\n",
+                        "unzip /tmp/terraform_1.8.3_linux_amd64.zip -d /bin/\n",
                         "echo 'vpc_master: '",
                         {"Ref":"VPC"},
                         ">> /home/ec2-user/resource_ids.txt\n",
