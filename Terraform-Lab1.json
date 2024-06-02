@@ -256,7 +256,7 @@
                         "yum -y install git wget jq unzip python3 python3-pip\n",
                         "pip3 install boto3 botocore ansible\n",
                         "pip3 install --upgrade --force pip\n",
-                        "wget -P /tmp -c https://releases.hashicorp.com/terraform/0.12.13/terraform_0.12.13_linux_amd64.zip\n",
+                        "wget -P /tmp -c https://releases.hashicorp.com/terraform/1.8.4/terraform_1.8.4_linux_amd64.zip\n",
                         "alternatives --set python /usr/bin/python3\n",
                         "unzip /tmp/terraform_0.12.13_linux_amd64.zip -d /bin/\n",
                         "sudo -iu ec2-user pip3 install ansible --user\n",
